@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Put one or two Nero arms into SDK leader zero-force drag mode.
+
+This is a standalone example script. It does not import or modify the LeRobot
+Nero robot wrapper, and it does not send move_j/move_js/move_p commands.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+import time
+from dataclasses import dataclass
+from typing import Any
+
+from pyAgxArm import AgxArmFactory, ArmModel, NeroFW, create_agx_arm_config
+from pyAgxArm.protocols.can_protocol.msgs.nero.default import ArmMsgMotionCtrl
+
+
+@dataclass
+class ArmHandle:
+    name: str
+    channel: str
+    robot: Any
+
+
+@dataclass(frozen=True)
+class ArmRole:
+    name: str
+    channel: str
+    role: str
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    parts = re.findall(r"\d+", str(version))
+    return tuple(int(part) for part in parts[:3]) if parts else (0,)
+
+
+def _available_nero_fw_names() -> list[str]:
+    return sorted(name for name in dir(NeroFW) if name.isupper())
+
+
+def _select_firmware_from_software_version(software_version: str) -> str:
+    version = _version_tuple(software_version)
+    available = set(_available_nero_fw_names())
+    if version >= (1, 20):
+        if "V120" not in available:
+            raise RuntimeError(
+                f"Detected Nero firmware {software_version}, which should use NeroFW.V120, "
+                "but this local pyAgxArm does not provide V120. Update pyAgxArm first, "
+                "or explicitly pass --firmware V112 only if you know this arm is compatible."
+            )
+        return "V120"
+    if version >= (1, 12):
+        return "V112"
+    if version >= (1, 11):
+        return "V111"
+    return "DEFAULT"
+
+
+def _firmware_probe_order() -> list[str]:
+    preferred = ["V120", "V112", "V111", "DEFAULT"]
+    available = set(_available_nero_fw_names())
+    return [name for name in preferred if name in available]
+
+
+def _make_robot(channel: str, firmware_name: str, interface: str) -> Any:
+    if not hasattr(NeroFW, firmware_name):
+        raise ValueError(
+            f"NeroFW.{firmware_name} is not available in this pyAgxArm. "
+            f"Available: {', '.join(_available_nero_fw_names())}"
+        )
+    firmware = getattr(NeroFW, firmware_name)
+    cfg = create_agx_arm_config(
+        robot=ArmModel.NERO,
+        firmeware_version=firmware,
+        interface=interface,
+        channel=channel,
+    )
+    return AgxArmFactory.create_arm(cfg)
+
+
+def _detect_firmware(channel: str, interface: str, timeout_s: float) -> str:
+    errors: list[str] = []
+    for candidate in _firmware_probe_order():
+        robot = _make_robot(channel, candidate, interface)
+        try:
+            print(f"[{channel}] Detecting Nero firmware with NeroFW.{candidate}...")
+            robot.connect()
+            deadline = time.time() + timeout_s
+            firmware = None
+            while time.time() < deadline:
+                firmware = robot.get_firmware()
+                if firmware is not None:
+                    break
+                time.sleep(0.2)
+            if firmware is None:
+                errors.append(f"NeroFW.{candidate}: no firmware response")
+                continue
+            software_version = firmware["software_version"]
+            selected = _select_firmware_from_software_version(software_version)
+            print(f"[{channel}] Detected software_version={software_version}; using NeroFW.{selected}")
+            return selected
+        except Exception as exc:
+            errors.append(f"NeroFW.{candidate}: {type(exc).__name__}: {exc}")
+        finally:
+            try:
+                robot.disconnect()
+            except Exception:
+                pass
+    raise TimeoutError(
+        f"[{channel}] Timed out waiting for firmware with candidates {_firmware_probe_order()}. "
+        f"Details: {'; '.join(errors)}"
+    )
+
+
+def _print_status(handle: ArmHandle, label: str) -> None:
+    robot = handle.robot
+    status = robot.get_arm_status()
+    if status is None:
+        print(f"[{handle.name}:{handle.channel}] {label}: arm_status=None")
+    else:
+        msg = status.msg
+        print(
+            f"[{handle.name}:{handle.channel}] {label}: "
+            f"ctrl_mode={msg.ctrl_mode}, arm_status={msg.arm_status}, "
+            f"mode_feedback={msg.mode_feedback}, teach_status={msg.teach_status}, "
+            f"motion_status={msg.motion_status}, err_status={msg.err_status}"
+        )
+    try:
+        print(f"[{handle.name}:{handle.channel}] {label}: joints_enable={robot.get_joints_enable_status_list()}")
+    except Exception as exc:
+        print(f"[{handle.name}:{handle.channel}] {label}: failed to read joints_enable: {exc}")
+
+
+def _send_drag_teach_control(handle: ArmHandle, value: int, label: str) -> None:
+    print(f"[{handle.name}:{handle.channel}] Sending drag teach control: {label} ({value:#04x})")
+    handle.robot._send_msg(ArmMsgMotionCtrl(grag_teach_ctrl=value))
+
+
+def _enable_robot(handle: ArmHandle, timeout_s: float) -> None:
+    deadline = time.time() + timeout_s
+    while True:
+        ok = bool(handle.robot.enable())
+        time.sleep(0.3)
+        try:
+            enabled = all(handle.robot.get_joints_enable_status_list())
+        except Exception:
+            enabled = ok
+        if enabled:
+            return
+        _print_status(handle, "waiting-enable")
+        if time.time() >= deadline:
+            raise TimeoutError(f"[{handle.name}:{handle.channel}] Timed out enabling Nero arm.")
+
+
+def _connect_arm(name: str, channel: str, firmware_name: str, interface: str) -> ArmHandle:
+    robot = _make_robot(channel, firmware_name, interface)
+    handle = ArmHandle(name=name, channel=channel, robot=robot)
+    print(f"[{name}:{channel}] Connecting with NeroFW.{firmware_name}...")
+    robot.connect()
+    return handle
+
+
+def _enter_role(handle: ArmHandle, role: str, args: argparse.Namespace) -> None:
+    robot = handle.robot
+    print(f"[{handle.name}:{handle.channel}] Clearing joint errors...")
+    robot.clear_joint_error(255)
+    time.sleep(0.2)
+    if args.enable:
+        print(f"[{handle.name}:{handle.channel}] Enabling joints before leader mode...")
+        _enable_robot(handle, args.enable_timeout_s)
+    if args.speed_percent is not None:
+        robot.set_speed_percent(args.speed_percent)
+    _print_status(handle, f"before-{role}")
+    if role == "leader":
+        print(f"[{handle.name}:{handle.channel}] Calling robot.set_leader_mode()")
+        robot.set_leader_mode()
+        time.sleep(args.mode_settle_s)
+        if args.start_drag_teach:
+            _send_drag_teach_control(handle, 0x01, "start drag teach")
+    elif role == "follower":
+        print(f"[{handle.name}:{handle.channel}] Calling robot.set_follower_mode()")
+        robot.set_follower_mode()
+    else:
+        raise ValueError(f"Unsupported arm role: {role!r}")
+    time.sleep(args.mode_settle_s)
+    _print_status(handle, f"{role}-mode")
+
+
+def _exit_zero_gravity(handles: list[ArmHandle], args: argparse.Namespace) -> None:
+    for handle in reversed(handles):
+        robot = handle.robot
+        try:
+            if args.start_drag_teach:
+                _send_drag_teach_control(handle, 0x02, "stop drag teach")
+                time.sleep(args.mode_settle_s)
+            if args.restore_follower:
+                print(f"[{handle.name}:{handle.channel}] Calling robot.set_follower_mode()")
+                robot.set_follower_mode()
+                time.sleep(args.mode_settle_s)
+                _print_status(handle, "follower-mode")
+            if args.disable_on_exit:
+                print(f"[{handle.name}:{handle.channel}] Disabling joints")
+                robot.disable()
+        except Exception as exc:
+            print(f"[{handle.name}:{handle.channel}] Exit handling failed: {exc}", file=sys.stderr)
+        finally:
+            try:
+                robot.disconnect()
+                print(f"[{handle.name}:{handle.channel}] Disconnected")
+            except Exception as exc:
+                print(f"[{handle.name}:{handle.channel}] Disconnect failed: {exc}", file=sys.stderr)
+
+
+def _plan_arm_roles(mode: str, *, right_channel: str, left_channel: str, single_arm: str) -> list[ArmRole]:
+    if mode == "leader-only":
+        if single_arm == "right":
+            return [ArmRole(name="right", channel=right_channel, role="leader")]
+        if single_arm == "left":
+            return [ArmRole(name="left", channel=left_channel, role="leader")]
+        raise ValueError("--single-arm must be 'right' or 'left' for --mode leader-only.")
+    if mode == "pair-right-leader":
+        return [
+            ArmRole(name="right", channel=right_channel, role="leader"),
+            ArmRole(name="left", channel=left_channel, role="follower"),
+        ]
+    if mode == "pair-left-leader":
+        return [
+            ArmRole(name="left", channel=left_channel, role="leader"),
+            ArmRole(name="right", channel=right_channel, role="follower"),
+        ]
+    raise ValueError(f"Unsupported mode: {mode!r}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Put Nero arm(s) into leader zero-force drag mode for manual dragging."
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("leader-only", "pair-right-leader", "pair-left-leader"),
+        default="leader-only",
+        help=(
+            "leader-only: set one arm to leader drag mode. "
+            "pair-right-leader: right leader, left follower. "
+            "pair-left-leader: left leader, right follower."
+        ),
+    )
+    parser.add_argument(
+        "--single-arm",
+        choices=("right", "left"),
+        default="right",
+        help="Arm used when --mode=leader-only.",
+    )
+    parser.add_argument("--right-channel", default="can0")
+    parser.add_argument("--left-channel", default="can1")
+    parser.add_argument("--interface", default="socketcan")
+    parser.add_argument(
+        "--firmware",
+        default="auto",
+        help="NeroFW name: DEFAULT, V111, V112, V120 if your local SDK supports it, or auto.",
+    )
+    parser.add_argument("--detect-timeout-s", type=float, default=8.0)
+    parser.add_argument("--enable", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--enable-timeout-s", type=float, default=10.0)
+    parser.add_argument("--speed-percent", type=int, default=20)
+    parser.add_argument("--mode-settle-s", type=float, default=0.5)
+    parser.add_argument(
+        "--start-drag-teach",
+        action="store_true",
+        help="After set_leader_mode(), also send ArmMsgMotionCtrl(grag_teach_ctrl=0x01).",
+    )
+    parser.add_argument("--restore-follower", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--disable-on-exit", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    arm_roles = _plan_arm_roles(
+        args.mode,
+        right_channel=args.right_channel,
+        left_channel=args.left_channel,
+        single_arm=args.single_arm,
+    )
+
+    handles: list[ArmHandle] = []
+    try:
+        for arm_role in arm_roles:
+            firmware_name = (
+                _detect_firmware(arm_role.channel, args.interface, args.detect_timeout_s)
+                if args.firmware == "auto"
+                else args.firmware
+            )
+            handle = _connect_arm(arm_role.name, arm_role.channel, firmware_name, args.interface)
+            handles.append(handle)
+            _enter_role(handle, arm_role.role, args)
+
+        print(f"\nMode {args.mode!r} is active.")
+        print("Manually drag the arm(s). Press ENTER or Ctrl-C to restore follower mode and disconnect.")
+        input()
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+    finally:
+        _exit_zero_gravity(handles, args)
+
+
+if __name__ == "__main__":
+    main()

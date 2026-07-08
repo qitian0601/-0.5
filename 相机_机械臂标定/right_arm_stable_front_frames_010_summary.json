@@ -1,0 +1,169 @@
+{
+  "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010": [
+    {
+      "order": 1,
+      "frame_index": 113,
+      "timestamp_s": 3.7666666507720947,
+      "pause_frame_range": {
+        "start": 77,
+        "end": 140
+      },
+      "motion_score": -4.4712045842397e-18,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/01_frame_0113"
+    },
+    {
+      "order": 2,
+      "frame_index": 223,
+      "timestamp_s": 7.433333396911621,
+      "pause_frame_range": {
+        "start": 208,
+        "end": 227
+      },
+      "motion_score": 0.00013467209242579143,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/02_frame_0223"
+    },
+    {
+      "order": 3,
+      "frame_index": 293,
+      "timestamp_s": 9.766666412353516,
+      "pause_frame_range": {
+        "start": 281,
+        "end": 305
+      },
+      "motion_score": 7.75575076845479e-06,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/03_frame_0293"
+    },
+    {
+      "order": 4,
+      "frame_index": 401,
+      "timestamp_s": 13.366666793823242,
+      "pause_frame_range": {
+        "start": 370,
+        "end": 435
+      },
+      "motion_score": -2.311270568741234e-18,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/04_frame_0401"
+    },
+    {
+      "order": 5,
+      "frame_index": 522,
+      "timestamp_s": 17.399999618530273,
+      "pause_frame_range": {
+        "start": 487,
+        "end": 532
+      },
+      "motion_score": 5.30926181808107e-07,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/05_frame_0522"
+    },
+    {
+      "order": 6,
+      "frame_index": 602,
+      "timestamp_s": 20.066667556762695,
+      "pause_frame_range": {
+        "start": 599,
+        "end": 609
+      },
+      "motion_score": 0.00012242813928374342,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/06_frame_0602"
+    },
+    {
+      "order": 7,
+      "frame_index": 726,
+      "timestamp_s": 24.200000762939453,
+      "pause_frame_range": {
+        "start": 701,
+        "end": 750
+      },
+      "motion_score": 5.847419158092079e-06,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/07_frame_0726"
+    },
+    {
+      "order": 8,
+      "frame_index": 848,
+      "timestamp_s": 28.266666412353516,
+      "pause_frame_range": {
+        "start": 804,
+        "end": 863
+      },
+      "motion_score": -7.586685879012934e-18,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/08_frame_0848"
+    },
+    {
+      "order": 9,
+      "frame_index": 944,
+      "timestamp_s": 31.46666717529297,
+      "pause_frame_range": {
+        "start": 918,
+        "end": 966
+      },
+      "motion_score": 3.219891490375809e-07,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/09_frame_0944"
+    },
+    {
+      "order": 10,
+      "frame_index": 1067,
+      "timestamp_s": 35.56666564941406,
+      "pause_frame_range": {
+        "start": 1023,
+        "end": 1080
+      },
+      "motion_score": -1.2802997112520667e-17,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/10_frame_1067"
+    },
+    {
+      "order": 11,
+      "frame_index": 1192,
+      "timestamp_s": 39.733333587646484,
+      "pause_frame_range": {
+        "start": 1138,
+        "end": 1197
+      },
+      "motion_score": -1.1862037622893057e-17,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/11_frame_1192"
+    },
+    {
+      "order": 12,
+      "frame_index": 1288,
+      "timestamp_s": 42.93333435058594,
+      "pause_frame_range": {
+        "start": 1262,
+        "end": 1314
+      },
+      "motion_score": -1.206626667795326e-17,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/12_frame_1288"
+    },
+    {
+      "order": 13,
+      "frame_index": 1418,
+      "timestamp_s": 47.266666412353516,
+      "pause_frame_range": {
+        "start": 1390,
+        "end": 1436
+      },
+      "motion_score": -7.352245982167327e-18,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/13_frame_1418"
+    },
+    {
+      "order": 14,
+      "frame_index": 1495,
+      "timestamp_s": 49.83333206176758,
+      "pause_frame_range": {
+        "start": 1477,
+        "end": 1517
+      },
+      "motion_score": 9.496886725337019e-06,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/14_frame_1495"
+    },
+    {
+      "order": 15,
+      "frame_index": 1630,
+      "timestamp_s": 54.33333206176758,
+      "pause_frame_range": {
+        "start": 1581,
+        "end": 1636
+      },
+      "motion_score": -7.779903505758831e-18,
+      "directory": "/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/right_arm_stable_front_frames_010/15_frame_1630"
+    }
+  ]
+}
