@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Nero 双臂 pickplace EE-local-SE3 异步推理 client。
+# Nero 双臂 pickplace 14D EE-SO3 异步推理 client。
 # 请先在另一个终端启动 pickplace_ee_new_server.sh。
 
 cd /home/chenglong/workplace/nero_teleop_ws/lerobot
@@ -14,11 +14,11 @@ export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
 # 可通过环境变量覆盖，不需要改脚本文件。
-POLICY_PATH="${NERO_PICKPLACE_EE_POLICY_PATH:-/home/chenglong/workplace/nero_teleop_ws/lerobot/outputs/train/pickplace_ee_new/7.7/pickplace_001_ee_local_se3_4gpu/checkpoints/012000/pretrained_model}"
+POLICY_PATH="${NERO_PICKPLACE_EE_POLICY_PATH:-/home/chenglong/workplace/nero_teleop_ws/lerobot/outputs/train/pickplace_ee_mix_56/checkpoints/020000/pretrained_model}"
 RIGHT_CAN="${NERO_RIGHT_CAN:-nero_right}"
 LEFT_CAN="${NERO_LEFT_CAN:-nero_left}"
 DRY_RUN="${NERO_DRY_RUN:-false}"
-TASK="${NERO_PICKPLACE_EE_TASK:-Pick up the cube and place it in the target area. If no cube is visible, stay in the ready pose.}"
+TASK="${NERO_PICKPLACE_EE_TASK:-Pick up the cube and place it in the target area.}"
 
 args=(
   # 使用 Nero 双臂机器人配置。
@@ -27,7 +27,7 @@ args=(
   --server_address=127.0.0.1:8080
   # policy 类型。
   --policy_type=pi05
-  # pickplace EE-local-SE3 PI05 checkpoint，默认 016000。
+  # pickplace 14D EE-SO3 PI05 checkpoint，默认 mix_56 014000。
   --policy_path="${POLICY_PATH}"
   # server 侧 policy 推理设备。
   --policy_device=cuda
@@ -35,8 +35,8 @@ args=(
   --client_device=cpu
   # 任务文本指令，与训练时 task 保持一致。
   --task="${TASK}"
-  # 启用 EE-local-SE3 action 模式：policy 输出 16D EE action，再经 cuRobo IK 转 joint action。
-  --action_mode=ee_local_se3
+  # 启用 EE-SO3 action 模式：policy 输出 14D EE action，再经 cuRobo IK 转 joint action。
+  --action_mode=ee_so3
   # 三台 RealSense 相机及 EE 模型训练时的推理分辨率。
   --robot.cameras="{front: {type: intelrealsense, serial_number_or_name: '324422301659', width: 1280, height: 800, fps: 30, warmup_s: 3}, left_wrist: {type: intelrealsense, serial_number_or_name: '244222077114', width: 640, height: 480, fps: 30, warmup_s: 3}, right_wrist: {type: intelrealsense, serial_number_or_name: '244222070153', width: 640, height: 480, fps: 30, warmup_s: 3}}"
   # 右臂 CAN 口；默认 nero_right，可用 NERO_RIGHT_CAN 覆盖。
@@ -52,7 +52,7 @@ args=(
   "--left_handeye_camera_to_base_yaml=/home/chenglong/workplace/nero_teleop_ws/lerobot/相机_机械臂标定/handeye_result_left(1).yml"
   # Nero SDK 读出的末端姿态是 Euler，当前按 xyz 解释。
   --ee_euler_order=xyz
-  # EE policy 里保留的 base/head 两维，目前固定为 0。
+  # 旧 16D EE-local-SE3 policy 使用的 base/head 两维；14D EE-SO3 会忽略。
   --ee_base_or_head_x=0.0
   --ee_base_or_head_y=0.0
   # cuRobo IK 配置；输出 joint target 后仍走原 joint safety/high-rate executor/move_js。

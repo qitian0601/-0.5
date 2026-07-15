@@ -144,14 +144,14 @@ bash scripts/demo/pickplace_new_client.sh
 
 ```bash
 cd /home/chenglong/workplace/nero_teleop_ws/lerobot
-bash scripts/demo/pickplace_ee_server.sh
+bash scripts/demo/pickplace_ee_new_server.sh
 ```
 
 终端 2：
 
 ```bash
 cd /home/chenglong/workplace/nero_teleop_ws/lerobot
-bash scripts/demo/pickplace_ee_client.sh
+bash scripts/demo/pickplace_ee_new_client.sh
 ```
 
 常用覆盖项：

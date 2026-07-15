@@ -6,7 +6,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from pprint import pformat
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import numpy as np
 from PIL import Image
@@ -29,7 +29,12 @@ from lerobot.utils.utils import init_logging
 
 from .config_nero import NeroDualRobotConfig
 from .curobo_ik_adapter import NeroDualCuroboIKAdapter
-from .ee_local_se3_adapter import EE_LOCAL_SE3_ACTION_NAMES, NeroEELocalSE3Adapter
+from .ee_local_se3_adapter import (
+    EE_LOCAL_SE3_ACTION_NAMES,
+    EE_SO3_ACTION_NAMES,
+    NeroEESO3Adapter,
+    NeroEELocalSE3Adapter,
+)
 from .mapping import namespaced_gripper_name, namespaced_joint_names
 from .prepare_sync import smooth_takeover_commands
 from .robot_nero_dual import NeroDualRobot
@@ -185,9 +190,9 @@ class NeroAsyncClientConfig:
     trace: NeroInferenceTraceConfig = field(default_factory=NeroInferenceTraceConfig)
 
     def __post_init__(self) -> None:
-        if self.action_mode not in {"joint", "ee_local_se3"}:
+        if self.action_mode not in {"joint", "ee_local_se3", "ee_so3"}:
             raise ValueError(
-                f"action_mode must be 'joint' or 'ee_local_se3', got {self.action_mode!r}."
+                f"action_mode must be 'joint', 'ee_local_se3', or 'ee_so3', got {self.action_mode!r}."
             )
 
 
@@ -453,13 +458,15 @@ def limit_ee_policy_action_step(
     *,
     max_position_step_m: float,
     max_rotation_step_rad: float,
+    action_names: Sequence[str] = EE_LOCAL_SE3_ACTION_NAMES,
 ) -> np.ndarray:
     target = np.asarray(target, dtype=float)
     current = np.asarray(current, dtype=float)
-    if target.shape != (len(EE_LOCAL_SE3_ACTION_NAMES),):
-        raise ValueError(f"target EE action must have shape ({len(EE_LOCAL_SE3_ACTION_NAMES)},), got {target.shape}.")
-    if current.shape != (len(EE_LOCAL_SE3_ACTION_NAMES),):
-        raise ValueError(f"current EE state must have shape ({len(EE_LOCAL_SE3_ACTION_NAMES)},), got {current.shape}.")
+    expected_shape = (len(action_names),)
+    if target.shape != expected_shape:
+        raise ValueError(f"target EE action must have shape {expected_shape}, got {target.shape}.")
+    if current.shape != expected_shape:
+        raise ValueError(f"current EE state must have shape {expected_shape}, got {current.shape}.")
 
     limited = target.copy()
     for offset in (0, 7):
@@ -861,6 +868,8 @@ class EESafeNeroRobot(SafeNeroRobot):
         *,
         ee_adapter: NeroEELocalSE3Adapter,
         ik_adapter: NeroDualCuroboIKAdapter,
+        action_names: Sequence[str] = EE_LOCAL_SE3_ACTION_NAMES,
+        action_mode_name: str = "ee_local_se3",
         image_saver: ObservationImageSaver | None = None,
         video_saver: ObservationVideoSaver | None = None,
         tracer: NeroInferenceTracer | None = None,
@@ -868,11 +877,13 @@ class EESafeNeroRobot(SafeNeroRobot):
         super().__init__(robot, safety, image_saver=image_saver, video_saver=video_saver, tracer=tracer)
         self.ee_adapter = ee_adapter
         self.ik_adapter = ik_adapter
+        self.ee_action_names = tuple(action_names)
+        self.action_mode_name = action_mode_name
         self._last_success_ik_action: dict[str, float] | None = None
 
     @property
     def observation_features(self) -> dict:
-        features = {name: float for name in EE_LOCAL_SE3_ACTION_NAMES}
+        features = {name: float for name in self.ee_action_names}
         flange_features = getattr(self.robot, "flange_observation_features", {})
         features.update(
             {
@@ -885,7 +896,7 @@ class EESafeNeroRobot(SafeNeroRobot):
 
     @property
     def action_features(self) -> dict:
-        return {name: float for name in EE_LOCAL_SE3_ACTION_NAMES}
+        return {name: float for name in self.ee_action_names}
 
     def get_observation(self) -> RobotObservation:
         get_flange_observation = getattr(self.robot, "get_flange_observation", None)
@@ -901,13 +912,13 @@ class EESafeNeroRobot(SafeNeroRobot):
             self.ee_adapter.flange_observation_to_policy_state(flange_observation),
             dtype=float,
         )
-        if policy_state.shape != (len(EE_LOCAL_SE3_ACTION_NAMES),):
+        if policy_state.shape != (len(self.ee_action_names),):
             raise ValueError(
-                f"EE local SE3 observation state must have shape ({len(EE_LOCAL_SE3_ACTION_NAMES)},), "
+                f"{self.action_mode_name} observation state must have shape ({len(self.ee_action_names)},), "
                 f"got {policy_state.shape}."
             )
         observation = {
-            name: float(policy_state[idx]) for idx, name in enumerate(EE_LOCAL_SE3_ACTION_NAMES)
+            name: float(policy_state[idx]) for idx, name in enumerate(self.ee_action_names)
         }
         for name in self.observation_features:
             if name in observation:
@@ -918,7 +929,7 @@ class EESafeNeroRobot(SafeNeroRobot):
 
     def send_action(self, action: RobotAction) -> RobotAction:
         policy_action = np.asarray(
-            [float(action[name]) for name in EE_LOCAL_SE3_ACTION_NAMES],
+            [float(action[name]) for name in self.ee_action_names],
             dtype=float,
         )
         if self.tracer is not None:
@@ -927,7 +938,7 @@ class EESafeNeroRobot(SafeNeroRobot):
                 {
                     "action": {
                         name: float(policy_action[idx])
-                        for idx, name in enumerate(EE_LOCAL_SE3_ACTION_NAMES)
+                        for idx, name in enumerate(self.ee_action_names)
                     }
                 },
             )
@@ -939,6 +950,7 @@ class EESafeNeroRobot(SafeNeroRobot):
                 current_policy_state,
                 max_position_step_m=self.safety.max_ee_position_step_m,
                 max_rotation_step_rad=self.safety.max_ee_rotation_step_rad,
+                action_names=self.ee_action_names,
             )
             if self.tracer is not None:
                 self.tracer.record(
@@ -946,15 +958,15 @@ class EESafeNeroRobot(SafeNeroRobot):
                     {
                         "raw_action": {
                             name: float(policy_action[idx])
-                            for idx, name in enumerate(EE_LOCAL_SE3_ACTION_NAMES)
+                            for idx, name in enumerate(self.ee_action_names)
                         },
                         "current_state": {
                             name: float(current_policy_state[idx])
-                            for idx, name in enumerate(EE_LOCAL_SE3_ACTION_NAMES)
+                            for idx, name in enumerate(self.ee_action_names)
                         },
                         "limited_action": {
                             name: float(limited_policy_action[idx])
-                            for idx, name in enumerate(EE_LOCAL_SE3_ACTION_NAMES)
+                            for idx, name in enumerate(self.ee_action_names)
                         },
                     },
                 )
@@ -1083,7 +1095,8 @@ class EESafeNeroRobot(SafeNeroRobot):
 
 
 def _make_ee_adapter_from_config(cfg: NeroAsyncClientConfig) -> NeroEELocalSE3Adapter:
-    return NeroEELocalSE3Adapter.from_camera_to_base_yamls(
+    adapter_cls = NeroEESO3Adapter if cfg.action_mode == "ee_so3" else NeroEELocalSE3Adapter
+    return adapter_cls.from_camera_to_base_yamls(
         right_camera_to_base_yaml=cfg.right_handeye_camera_to_base_yaml,
         left_camera_to_base_yaml=cfg.left_handeye_camera_to_base_yaml,
         base_or_head_xy=(cfg.ee_base_or_head_x, cfg.ee_base_or_head_y),
@@ -1111,12 +1124,15 @@ def _make_nero_robot_wrapper(
     video_saver: ObservationVideoSaver,
     tracer: NeroInferenceTracer | None,
 ) -> SafeNeroRobot:
-    if cfg is not None and cfg.action_mode == "ee_local_se3":
+    if cfg is not None and cfg.action_mode in {"ee_local_se3", "ee_so3"}:
+        action_names = EE_SO3_ACTION_NAMES if cfg.action_mode == "ee_so3" else EE_LOCAL_SE3_ACTION_NAMES
         return EESafeNeroRobot(
             robot,
             safety,
             ee_adapter=_make_ee_adapter_from_config(cfg),
             ik_adapter=_make_curobo_adapter_from_config(cfg),
+            action_names=action_names,
+            action_mode_name=cfg.action_mode,
             image_saver=image_saver,
             video_saver=video_saver,
             tracer=tracer,

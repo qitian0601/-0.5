@@ -28,7 +28,12 @@ from lerobot_robot_nero.async_client import (
     run_nero_async_client,
     sync_to_fixed_ready_pose,
 )
-from lerobot_robot_nero.ee_local_se3_adapter import EE_LOCAL_SE3_ACTION_NAMES, NeroEETargets
+from lerobot_robot_nero.ee_local_se3_adapter import (
+    EE_LOCAL_SE3_ACTION_NAMES,
+    EE_SO3_ACTION_NAMES,
+    NeroEESO3Adapter,
+    NeroEETargets,
+)
 from lerobot_robot_nero.trace import NeroInferenceTraceConfig, NeroInferenceTracer
 
 
@@ -106,6 +111,12 @@ class FakeEEAdapter:
 
     def read_robot_policy_state(self, robot):
         return self.flange_observation_to_policy_state(robot.get_flange_state_observation())
+
+
+class FakeEESO3Adapter(FakeEEAdapter):
+    def flange_observation_to_policy_state(self, observation):
+        self.observations.append(observation)
+        return np.arange(len(EE_SO3_ACTION_NAMES), dtype=float)
 
 
 class FakeTraceEEAdapter(FakeEEAdapter):
@@ -469,6 +480,44 @@ def test_ee_safe_nero_robot_exposes_ee_policy_features_and_camera_observation():
     assert [observation[name] for name in EE_LOCAL_SE3_ACTION_NAMES] == list(range(16))
     assert observation["front"].shape == (2, 2, 3)
     assert ee_adapter.observations[0]["right_flange_x"] == 0.0
+
+
+def test_ee_safe_nero_robot_can_expose_ee_so3_14d_features():
+    robot = FakeEERobot()
+    ee_adapter = FakeEESO3Adapter()
+    safe_robot = EESafeNeroRobot(
+        robot,
+        NeroAsyncSafetyConfig(),
+        ee_adapter=ee_adapter,
+        ik_adapter=FakeIKAdapter(),
+        action_names=EE_SO3_ACTION_NAMES,
+        action_mode_name="ee_so3",
+    )
+
+    observation = safe_robot.get_observation()
+
+    assert list(safe_robot.action_features) == EE_SO3_ACTION_NAMES
+    assert list(safe_robot.observation_features) == [*EE_SO3_ACTION_NAMES, "front"]
+    assert [observation[name] for name in EE_SO3_ACTION_NAMES] == list(range(14))
+    assert "base_or_head_x" not in observation
+    assert observation["front"].shape == (2, 2, 3)
+
+
+def test_ee_so3_adapter_uses_14d_policy_state_and_action_without_base_head():
+    adapter = NeroEESO3Adapter()
+    observation = {}
+    for arm in ("right", "left"):
+        for idx, component in enumerate(("x", "y", "z", "roll", "pitch", "yaw")):
+            observation[f"{arm}_flange_{component}"] = float(idx)
+        observation[f"{arm}_gripper_width"] = 0.03
+
+    state = adapter.flange_observation_to_policy_state(observation)
+    targets = adapter.policy_action_to_nero_ee_targets(np.arange(14, dtype=float))
+
+    assert state.shape == (14,)
+    assert targets.base_or_head_xy.tolist() == [0.0, 0.0]
+    assert targets.right_gripper_width == pytest.approx(6.0)
+    assert targets.left_gripper_width == pytest.approx(13.0)
 
 
 def test_ee_safe_nero_robot_solves_ik_then_reuses_joint_high_rate_executor():

@@ -67,3 +67,17 @@ def test_pickplace_ee_new_client_handeye_defaults_exist():
         path = Path(match.group(1))
         assert path.exists()
         assert path.name == expected_paths[option]
+
+
+def test_pickplace_ee_new_client_defaults_to_mix_56_checkpoint_and_training_task():
+    text = read_script("scripts/demo/pickplace_ee_new_client.sh")
+
+    assert (
+        'POLICY_PATH="${NERO_PICKPLACE_EE_POLICY_PATH:-/home/chenglong/workplace/'
+        'nero_teleop_ws/lerobot/outputs/train/pickplace_ee_mix_56/checkpoints/014000/pretrained_model}"'
+        in text
+    )
+    assert (
+        'TASK="${NERO_PICKPLACE_EE_TASK:-Pick up the cube and place it in the target area.}"'
+        in text
+    )

@@ -27,6 +27,23 @@ EE_LOCAL_SE3_ACTION_NAMES = [
     "base_or_head_y",
 ]
 
+EE_SO3_ACTION_NAMES = [
+    "right_x",
+    "right_y",
+    "right_z",
+    "right_rx",
+    "right_ry",
+    "right_rz",
+    "right_gripper",
+    "left_x",
+    "left_y",
+    "left_z",
+    "left_rx",
+    "left_ry",
+    "left_rz",
+    "left_gripper",
+]
+
 FLANGE_POSE_COMPONENTS = ("x", "y", "z", "roll", "pitch", "yaw")
 
 
@@ -231,9 +248,41 @@ class NeroEELocalSE3Adapter:
         )
 
 
+@dataclass
+class NeroEESO3Adapter(NeroEELocalSE3Adapter):
+    """14D fixed-base EE SO3 representation used by mixed robot/human checkpoints."""
+
+    def flange_observation_to_policy_state(self, observation: dict[str, Any]) -> np.ndarray:
+        right_pose = self._flange_pose_from_observation(observation, "right")
+        left_pose = self._flange_pose_from_observation(observation, "left")
+        right_ee = self._pose_base_to_policy_ee(right_pose, self.camera_from_right_base)
+        left_ee = self._pose_base_to_policy_ee(left_pose, self.camera_from_left_base)
+        return np.concatenate(
+            (
+                right_ee,
+                np.asarray([self._gripper_from_observation(observation, "right")], dtype=float),
+                left_ee,
+                np.asarray([self._gripper_from_observation(observation, "left")], dtype=float),
+            )
+        )
+
+    def policy_action_to_nero_ee_targets(self, action: Any) -> NeroEETargets:
+        action = _as_vector(action, dim=14, name="policy action")
+        right_pose = self._policy_ee_to_base_pose(action[0:6], self.camera_from_right_base)
+        left_pose = self._policy_ee_to_base_pose(action[7:13], self.camera_from_left_base)
+        return NeroEETargets(
+            right_pose=right_pose,
+            right_gripper_width=float(action[6]),
+            left_pose=left_pose,
+            left_gripper_width=float(action[13]),
+        )
+
+
 __all__ = [
     "EE_LOCAL_SE3_ACTION_NAMES",
+    "EE_SO3_ACTION_NAMES",
     "FLANGE_POSE_COMPONENTS",
+    "NeroEESO3Adapter",
     "NeroEELocalSE3Adapter",
     "NeroEETargets",
     "SE3Transform",
