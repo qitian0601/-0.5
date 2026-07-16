@@ -10,6 +10,7 @@
 - `robotwin_camvla/DATASET.md`：数据结构、视角划分与已知限制。
 - `robotwin_camvla/REPRODUCTION.md`：CamVLA 分步复现方案。
 - `robotwin_camvla/render_profiles.example.yaml`：当前、推荐和快速渲染档位。
+- `robotwin_camvla/scripts/`：RoboTwin 多视角回放、启动和 LeRobot v3 转换脚本。
 
 ## Pi0.5 Baseline
 
@@ -36,4 +37,3 @@ bash training/train_pi05_baseline.sh
 `robotwin_camvla` 下记录的同步多视角 HDF5 不是现成的 CamVLA 训练集。当前文件中的
 `action/commanded` 是双臂关节目标；CamVLA 需要从连续 `ee_pose` 派生双臂末端位姿增量，
 并利用每个视角的外参将增量转换到相机坐标系。完成该转换和 LeRobot 数据适配后，才能进入联合训练。
-

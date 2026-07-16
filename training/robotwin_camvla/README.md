@@ -32,6 +32,38 @@ ${ROBOTWIN_ROOT}/data/place_two_cubes_box_multiview_50_pitch10_continuation
 
 完整字段见 [DATASET.md](DATASET.md)，训练和评估阶段见 [REPRODUCTION.md](REPRODUCTION.md)。
 
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `scripts/replay_multiview_dataset.py` | 从保存的 RoboTwin expert path 回放并同步重渲染 C0-C4、腕部视频、状态、外参和成功标记。 |
+| `scripts/run_replay_multiview.sh` | 多视角回放启动入口。要求 `ROBOTWIN_ROOT`，可选 `ROBOTWIN_PYTHON`。 |
+| `scripts/convert_robotwin_to_lerobot_v3.py` | 将原始 RoboTwin 采集数据转换为 LeRobot v3，用于 Pi0.5 关节动作基线。 |
+
+多视角回放示例：
+
+```bash
+export ROBOTWIN_ROOT=/path/to/RoboTwin
+export ROBOTWIN_PYTHON=/path/to/RoboTwin/python
+
+training/robotwin_camvla/scripts/run_replay_multiview.sh \
+  --source-root "${ROBOTWIN_ROOT}/data/place_two_cubes_box/demo_nero_two_cubes" \
+  --output-root "${ROBOTWIN_ROOT}/data/place_two_cubes_box_multiview_new" \
+  --train-pitch-degrees 10 \
+  --test-pitch-degrees 15
+```
+
+原始数据转换示例：
+
+```bash
+# Run this command in the LeRobot Python environment, not the RoboTwin-only environment.
+export LEROBOT_SRC="$(pwd)/src"
+python training/robotwin_camvla/scripts/convert_robotwin_to_lerobot_v3.py \
+  --input-dir /path/to/RoboTwin/data/place_two_cubes_box/demo_nero_two_cubes \
+  --output-dir /path/to/lerobot_dataset \
+  --repo-id place_two_cubes_box_lerobot_v3
+```
+
 ## Recommended Next Step
 
 先用现有 40 条训练轨迹完成最小闭环：
@@ -51,4 +83,3 @@ ${ROBOTWIN_ROOT}/data/place_two_cubes_box_multiview_50_pitch10_continuation
 这更接近离线渲染，而不是大规模训练数据生成。新数据建议先使用
 [render_profiles.example.yaml](render_profiles.example.yaml) 中的 `balanced_training` 档位，
 并用一条轨迹比较速度和图像质量后再批量生成。
-
