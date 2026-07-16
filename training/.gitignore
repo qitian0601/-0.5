@@ -1,0 +1,13 @@
+# Keep generated datasets and model artifacts outside Git.
+**/data/
+**/datasets/
+**/logs/
+**/outputs/
+**/checkpoints/
+*.hdf5
+*.mp4
+*.part.mp4
+*.safetensors
+*.pt
+*.pth
+
