@@ -300,6 +300,72 @@ ee_local: T_absolute = T_current @ T_delta
 
 不要直接把网络原始输出发送给机器人。
 
+## Hugging Face 上传与下载
+
+大文件传输应提交到计算节点，不要在 Slurm 管理节点执行。overlay 包含：
+
+```text
+scripts/upload_hf_with_host_patch.py
+scripts/upload_pickplace_ee_mix_56_ckpt.sbatch
+scripts/download_kai0_task_a_curl.sh
+scripts/download_qwen3_vl_30b_a3b.sbatch
+```
+
+### 上传 checkpoint
+
+`upload_hf_with_host_patch.py` 用于网络必须经过 `hf-mirror.com` 的环境。它会：
+
+- 禁用 Xet 并使用单线程 LFS 上传。
+- 修正镜像返回的 `hf-mirror.org` LFS completion URL。
+- 在共享文件系统偶发 Python import 失败时重试 import。
+- 使用一次 `create_commit` 原子发布目标目录。
+
+先在当前 shell 临时提供有目标仓库写权限的 token：
+
+```bash
+read -rsp "HF write token: " HF_TOKEN
+echo
+export HF_TOKEN
+```
+
+再上传仅供推理使用的 `pretrained_model`，不要上传体积更大的 optimizer state：
+
+```bash
+python scripts/upload_hf_with_host_patch.py \
+  --repo-id USER/MODEL_REPO \
+  --repo-type model \
+  --local-dir /path/to/checkpoints/012000/pretrained_model \
+  --path-in-repo . \
+  --commit-message "Upload checkpoint 012000"
+```
+
+上传结束后执行 `unset HF_TOKEN`。目标仓库必须已经存在，token 必须属于仓库
+所有者或具有写权限。`upload_pickplace_ee_mix_56_ckpt.sbatch` 是计算节点上传示例；
+使用前必须修改其中的 `REPO_ROOT`、`TRAIN_DIR`、`REPO_ID` 和 conda 路径。
+
+### 下载数据文件
+
+`download_kai0_task_a_curl.sh` 接收一个逐行列出 Hub 相对路径的 manifest，支持
+curl 断点续传、并发下载和 `.part` 文件原子发布：
+
+```bash
+BASE_URL=https://hf-mirror.com/datasets/ORG/DATASET/resolve/main \
+ROOT=/path/to/dataset \
+LIST=/path/to/files.txt \
+JOBS=16 \
+bash scripts/download_kai0_task_a_curl.sh
+```
+
+该脚本不会猜测文件列表，也不会忽略下载失败；错误文件写入
+`download_task_a_errors.log` 并返回非零退出码。
+
+### 下载大模型
+
+`download_qwen3_vl_30b_a3b.sbatch` 是固定 revision、多文件 aria2 下载示例。
+它使用临时目录下载，验证文件完整性、权重索引和全部 safetensors header 后再
+原子发布。迁移后必须修改 `REPO_ROOT`、`PYTHON`、`ARIA2C`、模型 ID、revision
+和文件清单，然后通过 `sbatch` 在计算节点执行。
+
 ## 测试
 
 应用 overlay 后运行：
